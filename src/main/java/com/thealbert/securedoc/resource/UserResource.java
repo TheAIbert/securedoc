@@ -26,7 +26,7 @@ import static org.springframework.http.HttpStatus.OK;
 public class UserResource {
 
     private final UserService userService;
-    private final AuthenticationManager authenticationManager;
+    // private final AuthenticationManager authenticationManager;
 
     @PostMapping("/register")
     public ResponseEntity<Response> saveUser(@RequestBody @Valid UserRequest user, HttpServletRequest request) {
@@ -40,12 +40,12 @@ public class UserResource {
         return ResponseEntity.ok().body(getResponse(request, emptyMap(), "Account verified.", OK));
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<?> test(@RequestBody UserRequest user) {
-        UsernamePasswordAuthenticationToken unauthenticated = UsernamePasswordAuthenticationToken.unauthenticated(user.getEmail(), user.getPassword());
-        Authentication authenticate = authenticationManager.authenticate(unauthenticated);
-        return ResponseEntity.ok().body(Map.of("user", authenticate));
-    }
+//    @PostMapping("/login")
+//    public ResponseEntity<?> test(@RequestBody UserRequest user) {
+//        UsernamePasswordAuthenticationToken unauthenticated = UsernamePasswordAuthenticationToken.unauthenticated(user.getEmail(), user.getPassword());
+//        Authentication authenticate = authenticationManager.authenticate(unauthenticated);
+//        return ResponseEntity.ok().body(Map.of("user", authenticate));
+//    }
 
     private URI getUri() {
         return URI.create("");
