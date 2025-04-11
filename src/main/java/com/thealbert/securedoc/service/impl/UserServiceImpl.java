@@ -1,11 +1,15 @@
 package com.thealbert.securedoc.service.impl;
 
+import com.thealbert.securedoc.cache.CacheStore;
+import com.thealbert.securedoc.domain.RequestContext;
+import com.thealbert.securedoc.dto.User;
 import com.thealbert.securedoc.entity.ConfirmationEntity;
 import com.thealbert.securedoc.entity.CredentialEntity;
 import com.thealbert.securedoc.entity.RoleEntity;
 import com.thealbert.securedoc.entity.UserEntity;
 import com.thealbert.securedoc.enumeration.Authority;
 import com.thealbert.securedoc.enumeration.EventType;
+import com.thealbert.securedoc.enumeration.LoginType;
 import com.thealbert.securedoc.event.UserEvent;
 import com.thealbert.securedoc.exception.ApiException;
 import com.thealbert.securedoc.repository.ConfirmationRepository;
@@ -22,6 +26,8 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 
 import static com.thealbert.securedoc.utils.UserUtils.createUserEntity;
+import static com.thealbert.securedoc.utils.UserUtils.fromUserEntity;
+import static java.time.LocalDateTime.now;
 
 @Slf4j
 @Service
@@ -34,6 +40,7 @@ public class UserServiceImpl implements UserService {
     private final CredentialRepository credentialRepository;
     private final ConfirmationRepository confirmationRepository;
     // private final BCryptPasswordEncoder encoder;
+    private final CacheStore<String, Integer> userCache;
     private final ApplicationEventPublisher publisher;
 
     @Override
@@ -65,6 +72,50 @@ public class UserServiceImpl implements UserService {
         userEntity.setEnabled(true);
         userRepository.save(userEntity);
         confirmationRepository.delete(confirmationEntity);
+    }
+
+    @Override
+    public void updateLoginAttempt(String email, LoginType loginType) {
+        var userEntity = getUserEntityByEmail(email);
+        RequestContext.setUserId(userEntity.getId());
+        switch (loginType) {
+            case LOGIN_ATTEMPT -> {
+                if (userCache.get(userEntity.getEmail()) == null) {
+                    userEntity.setLoginAttempts(0);
+                    userEntity.setAccountNonLocked(true);
+                }
+                userEntity.setLoginAttempts(userEntity.getLoginAttempts() + 1);
+                userCache.put(userEntity.getEmail(), userEntity.getLoginAttempts());
+                if (userCache.get(userEntity.getEmail()) > 5) {
+                    userEntity.setAccountNonLocked(false);
+                }
+            }
+            case LOGIN_SUCCESS -> {
+                userEntity.setAccountNonLocked(true);
+                userEntity.setLoginAttempts(0);
+                userEntity.setLastLogin(now());
+                userCache.evict(userEntity.getEmail());
+            }
+        }
+        userRepository.save(userEntity);
+    }
+
+    @Override
+    public User getUserByUserId(String userId) {
+        var userEntity = userRepository.findUserByUserId(userId).orElseThrow(() -> new ApiException("User not found"));
+        return fromUserEntity(userEntity, userEntity.getRole(), getUserCredentialById(userEntity.getId()));
+    }
+
+    @Override
+    public User getUserByEmail(String email) {
+        UserEntity userEntity = getUserEntityByEmail(email);
+        return fromUserEntity(userEntity, userEntity.getRole(), getUserCredentialById(userEntity.getId()));
+    }
+
+    @Override
+    public CredentialEntity getUserCredentialById(Long userId) {
+        var credentialById = credentialRepository.getCredentialByUserEntityId(userId);
+        return credentialById.orElseThrow(() -> new ApiException("Unable to find user credential"));
     }
 
     private UserEntity getUserEntityByEmail(String email) {
